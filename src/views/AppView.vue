@@ -18,9 +18,9 @@ const dataTemplate = {
   name: 'Tier List 1',
   description: 'Sample tier list for demonstration',
   itemDeck: [],
-  tiers: templates[1].tiers ?? [],
+  tiers: structuredClone(templates[1].tiers ?? []),
 }
-const data = ref<TierList[]>([{ ...dataTemplate }])
+const data = ref<TierList[]>([structuredClone(dataTemplate)])
 
 // Dynamically import draggable component for performance
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
@@ -176,14 +176,6 @@ function importFromJson(event: Event) {
   }
 }
 
-// Clear all data if confirmed
-function clearData() {
-  if (confirm('Are you sure you want to clear all data?')) {
-    data.value = [{ ...dataTemplate }]
-    console.log('All data cleared')
-  }
-}
-
 // Delete a tier from the tier list
 function onDeleteTier(id: string) {
   // Move any items from the tier to the item deck
@@ -201,6 +193,14 @@ function onDeleteTier(id: string) {
     (tier) => tier.id !== Number(id),
   )
   console.log(`Tier with id ${id} deleted`)
+}
+
+// Clear all data if confirmed
+function clearData() {
+  if (confirm('Are you sure you want to clear all data?')) {
+    data.value = [structuredClone(dataTemplate)]
+    console.log('All data cleared')
+  }
 }
 
 // Save data to IndexedDB
