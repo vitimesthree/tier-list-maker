@@ -26,10 +26,26 @@ const data = ref<TierList[]>([
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
 const drag = ref(false)
 
+// Helper function to generate unique IDs
+function generateUniqueId(): number {
+  let newId: number
+  const allExistingIds = new Set([
+    ...data.value[currentId.value].itemDeck.map((item) => item.id),
+    ...data.value[currentId.value].tiers.map((tier) => tier.id),
+    ...data.value[currentId.value].tiers.flatMap((tier) => tier.items.map((item) => item.id)),
+  ])
+
+  do {
+    newId = Date.now()
+  } while (allExistingIds.has(newId))
+
+  return newId
+}
+
 // Add a new tier to the current tier list
 function addTier() {
   const newTier: Tier = {
-    id: data.value[currentId.value].tiers.length + 1,
+    id: generateUniqueId(),
     label: 'New Tier',
     colorHex: '#fff',
     items: [],
@@ -72,7 +88,7 @@ async function handlePaste() {
 function createItem(label: string, image: string) {
   // Initialise a new item
   const newItem: Item = {
-    id: data.value[currentId.value].itemDeck.length + 1,
+    id: generateUniqueId(),
     label: label,
     image: image,
   }
