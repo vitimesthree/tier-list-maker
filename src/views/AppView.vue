@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Import necessary libraries and components
-import { ref, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
+import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
+import { openDB } from 'idb'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -12,24 +13,45 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the data
 const currentId = ref(0)
-const data = ref<TierList[]>([
-  {
-    id: 0,
-    name: 'Tier List 1',
-    description: 'Sample tier list for demonstration',
-    itemDeck: [],
-    tiers: templates[1].tiers ?? [],
-  },
-])
+const dataTemplate = {
+  id: Date.now(),
+  name: 'Tier List 1',
+  description: 'Sample tier list for demonstration',
+  itemDeck: [],
+  tiers: templates[1].tiers ?? [],
+}
+const data = ref<TierList[]>([{ ...dataTemplate }])
 
 // Dynamically import draggable component for performance
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
 const drag = ref(false)
 
+// Helper function to generate unique IDs
+function generateUniqueId(): number {
+  let newId: number
+
+  if (data.value.length === 0) {
+    return Date.now()
+  }
+
+  const allExistingIds = new Set([
+    ...data.value[currentId.value].itemDeck.map((item) => item.id),
+    ...data.value[currentId.value].tiers.map((tier) => tier.id),
+    ...data.value[currentId.value].tiers.flatMap((tier) => tier.items.map((item) => item.id)),
+  ])
+
+  // Loop until ID is unique
+  do {
+    newId = Date.now()
+  } while (allExistingIds.has(newId))
+
+  return newId
+}
+
 // Add a new tier to the current tier list
 function addTier() {
   const newTier: Tier = {
-    id: data.value[currentId.value].tiers.length + 1,
+    id: generateUniqueId(),
     label: 'New Tier',
     colorHex: '#fff',
     items: [],
@@ -72,7 +94,7 @@ async function handlePaste() {
 function createItem(label: string, image: string) {
   // Initialise a new item
   const newItem: Item = {
-    id: data.value[currentId.value].itemDeck.length + 1,
+    id: generateUniqueId(),
     label: label,
     image: image,
   }
@@ -154,6 +176,14 @@ function importFromJson(event: Event) {
   }
 }
 
+// Clear all data if confirmed
+function clearData() {
+  if (confirm('Are you sure you want to clear all data?')) {
+    data.value = [{ ...dataTemplate }]
+    console.log('All data cleared')
+  }
+}
+
 // Delete a tier from the tier list
 function onDeleteTier(id: string) {
   // Move any items from the tier to the item deck
@@ -173,15 +203,86 @@ function onDeleteTier(id: string) {
   console.log(`Tier with id ${id} deleted`)
 }
 
+// Save data to IndexedDB
+async function saveDataToIndexedDB() {
+  const db = await openDB('tierListDB', 1, {
+    upgrade(db) {
+      db.createObjectStore('tierLists')
+    },
+  })
+
+  try {
+    // Convert reactive data to plain object using JSON parse/stringify
+    const plainData = JSON.parse(JSON.stringify(data.value))
+    await db.put('tierLists', plainData, 'allTierLists')
+    console.log('Data saved to IndexedDB successfully:', plainData)
+  } catch (err) {
+    console.error('Error saving data to IndexedDB:', err)
+  } finally {
+    db.close()
+  }
+}
+
+// Load data from IndexedDB
+async function loadDataFromIndexedDB() {
+  const db = await openDB('tierListDB', 1, {
+    upgrade(db) {
+      db.createObjectStore('tierLists')
+    },
+  })
+
+  try {
+    const savedData = await db.get('tierLists', 'allTierLists')
+    if (savedData) {
+      data.value = savedData
+      console.log('Data loaded from IndexedDB successfully:', savedData)
+    } else {
+      console.log('No saved data found in IndexedDB')
+    }
+  } catch (err) {
+    console.error('Error loading data from IndexedDB:', err)
+  } finally {
+    db.close()
+  }
+}
+
+// Watch for changes in the data and save to IndexedDB
+let saveTimeout: number | null = null
+watch(
+  data,
+  () => {
+    // Clear existing timeout
+    if (saveTimeout) {
+      clearTimeout(saveTimeout)
+    }
+
+    // Set new timeout to save after 1 second of no changes
+    saveTimeout = setTimeout(() => {
+      saveDataToIndexedDB()
+    }, 1000)
+  },
+  // Deep allows watching nested properties
+  { deep: true },
+)
+
 // Lifecycle hooks
 onMounted(() => {
   console.log('App mounted')
   console.log('Listening for paste event')
   window.addEventListener('paste', handlePaste)
+  loadDataFromIndexedDB()
 })
 onUnmounted(() => {
   console.log('Removing paste event listener')
   window.removeEventListener('paste', handlePaste)
+
+  // Clear any pending save timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+
+  // Save one final time before unmounting
+  saveDataToIndexedDB()
 })
 </script>
 
@@ -226,6 +327,7 @@ onUnmounted(() => {
         />
       </div>
       <PrimaryButton @click="exportToJson">Export</PrimaryButton>
+      <PrimaryButton @click="clearData">Clear</PrimaryButton>
     </div>
   </main>
 </template>
