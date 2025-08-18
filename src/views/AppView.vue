@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Import necessary libraries and components
-import { ref, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
+import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 import { openDB } from 'idb'
 
 import ItemRow from '@/components/ItemRow.vue'
@@ -13,15 +13,14 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the data
 const currentId = ref(0)
-const data = ref<TierList[]>([
-  {
-    id: Date.now(),
-    name: 'Tier List 1',
-    description: 'Sample tier list for demonstration',
-    itemDeck: [],
-    tiers: templates[1].tiers ?? [],
-  },
-])
+const dataTemplate = {
+  id: Date.now(),
+  name: 'Tier List 1',
+  description: 'Sample tier list for demonstration',
+  itemDeck: [],
+  tiers: templates[1].tiers ?? [],
+}
+const data = ref<TierList[]>([{ ...dataTemplate }])
 
 // Dynamically import draggable component for performance
 const draggable = defineAsyncComponent(() => import('vuedraggable'))
@@ -177,6 +176,14 @@ function importFromJson(event: Event) {
   }
 }
 
+// Clear all data if confirmed
+function clearData() {
+  if (confirm('Are you sure you want to clear all data?')) {
+    data.value = [{ ...dataTemplate }]
+    console.log('All data cleared')
+  }
+}
+
 // Delete a tier from the tier list
 function onDeleteTier(id: string) {
   // Move any items from the tier to the item deck
@@ -239,23 +246,48 @@ async function loadDataFromIndexedDB() {
   }
 }
 
+// Watch for changes in the data and save to IndexedDB
+let saveTimeout: number | null = null
+watch(
+  data,
+  () => {
+    // Clear existing timeout
+    if (saveTimeout) {
+      clearTimeout(saveTimeout)
+    }
+
+    // Set new timeout to save after 1 second of no changes
+    saveTimeout = setTimeout(() => {
+      saveDataToIndexedDB()
+    }, 1000)
+  },
+  // Deep allows watching nested properties
+  { deep: true },
+)
+
 // Lifecycle hooks
 onMounted(() => {
   console.log('App mounted')
   console.log('Listening for paste event')
   window.addEventListener('paste', handlePaste)
+  loadDataFromIndexedDB()
 })
 onUnmounted(() => {
   console.log('Removing paste event listener')
   window.removeEventListener('paste', handlePaste)
+
+  // Clear any pending save timeout
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+
+  // Save one final time before unmounting
+  saveDataToIndexedDB()
 })
 </script>
 
 <template>
   <main class="w-11/12 max-w-6xl m-auto">
-    <!-- save and load indexeddb -->
-    <button @click="saveDataToIndexedDB">Save</button>
-    <button @click="loadDataFromIndexedDB">Load</button>
     <InputField class="mb-8" v-model:value="data[currentId].name" />
     <!-- Draggable tiers -->
     <div id="capture">
@@ -295,6 +327,7 @@ onUnmounted(() => {
         />
       </div>
       <PrimaryButton @click="exportToJson">Export</PrimaryButton>
+      <PrimaryButton @click="clearData">Clear</PrimaryButton>
     </div>
   </main>
 </template>
