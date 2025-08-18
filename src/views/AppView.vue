@@ -14,7 +14,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 const currentId = ref(0)
 const data = ref<TierList[]>([
   {
-    id: 0,
+    id: Date.now(),
     name: 'Tier List 1',
     description: 'Sample tier list for demonstration',
     itemDeck: [],
@@ -29,12 +29,18 @@ const drag = ref(false)
 // Helper function to generate unique IDs
 function generateUniqueId(): number {
   let newId: number
+
+  if (data.value.length === 0) {
+    return Date.now()
+  }
+
   const allExistingIds = new Set([
     ...data.value[currentId.value].itemDeck.map((item) => item.id),
     ...data.value[currentId.value].tiers.map((tier) => tier.id),
     ...data.value[currentId.value].tiers.flatMap((tier) => tier.items.map((item) => item.id)),
   ])
 
+  // Loop until ID is unique
   do {
     newId = Date.now()
   } while (allExistingIds.has(newId))
