@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Import necessary libraries and components
 import { ref, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
+import { openDB } from 'idb'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -195,6 +196,49 @@ function onDeleteTier(id: string) {
   console.log(`Tier with id ${id} deleted`)
 }
 
+// Save data to IndexedDB
+async function saveDataToIndexedDB() {
+  const db = await openDB('tierListDB', 1, {
+    upgrade(db) {
+      db.createObjectStore('tierLists')
+    },
+  })
+
+  try {
+    // Convert reactive data to plain object using JSON parse/stringify
+    const plainData = JSON.parse(JSON.stringify(data.value))
+    await db.put('tierLists', plainData, 'allTierLists')
+    console.log('Data saved to IndexedDB successfully:', plainData)
+  } catch (err) {
+    console.error('Error saving data to IndexedDB:', err)
+  } finally {
+    db.close()
+  }
+}
+
+// Load data from IndexedDB
+async function loadDataFromIndexedDB() {
+  const db = await openDB('tierListDB', 1, {
+    upgrade(db) {
+      db.createObjectStore('tierLists')
+    },
+  })
+
+  try {
+    const savedData = await db.get('tierLists', 'allTierLists')
+    if (savedData) {
+      data.value = savedData
+      console.log('Data loaded from IndexedDB successfully:', savedData)
+    } else {
+      console.log('No saved data found in IndexedDB')
+    }
+  } catch (err) {
+    console.error('Error loading data from IndexedDB:', err)
+  } finally {
+    db.close()
+  }
+}
+
 // Lifecycle hooks
 onMounted(() => {
   console.log('App mounted')
@@ -209,6 +253,9 @@ onUnmounted(() => {
 
 <template>
   <main class="w-11/12 max-w-6xl m-auto">
+    <!-- save and load indexeddb -->
+    <button @click="saveDataToIndexedDB">Save</button>
+    <button @click="loadDataFromIndexedDB">Load</button>
     <InputField class="mb-8" v-model:value="data[currentId].name" />
     <!-- Draggable tiers -->
     <div id="capture">
