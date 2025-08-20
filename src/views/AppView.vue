@@ -3,6 +3,7 @@
 import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 
 import { useIndexedDB } from '@/composables/useIndexedDb'
+import { useImageExport } from '@/composables/useImageExport'
 import { useJson } from '@/composables/useJson'
 
 import ItemRow from '@/components/ItemRow.vue'
@@ -15,6 +16,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the storage composable
 const { saveData, loadData } = useIndexedDB()
+const { exportToImage } = useImageExport()
 const { exportToJson, importFromJson } = useJson()
 
 // Initialize the data
@@ -113,29 +115,6 @@ function createItem(label: string, image: string) {
   console.log(`Current item deck:`, data.value[currentId.value].itemDeck)
 }
 
-// Export the current tier list to an image
-async function exportToImage() {
-  // Dynamically import html2canvas to only load it when needed
-  console.log('Importing canvas library...')
-  const { default: html2canvas } = await import('html2canvas-pro')
-
-  // Render the selected area to a canvas
-  console.log('Rendering capture area...')
-
-  html2canvas(document.querySelector('#capture') as HTMLElement, {
-    windowWidth: 1152,
-  }).then((canvas) => {
-    // Download the canvas as an image
-    const link = document.createElement('a')
-    link.href = canvas.toDataURL('image/png')
-    link.download = 'tierlist.png'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    console.log('Image rendered')
-  })
-}
-
 // Updated import function to handle the Promise
 async function handleImportFromJson(event: Event) {
   try {
@@ -147,11 +126,6 @@ async function handleImportFromJson(event: Event) {
     console.error('Failed to import JSON:', error)
     // You could show an error message to the user here
   }
-}
-
-// Updated export function
-function handleExportToJson() {
-  exportToJson(data.value)
 }
 
 // Delete a tier from the tier list
@@ -179,6 +153,16 @@ function clearData() {
     data.value = [structuredClone(dataTemplate)]
     console.log('All data cleared')
   }
+}
+
+// Handle export image function
+function handleExportToImage() {
+  exportToImage()
+}
+
+// Handle export function
+function handleExportToJson() {
+  exportToJson(data.value)
 }
 
 // Watch for changes in the data and save to IndexedDB
@@ -258,7 +242,7 @@ onUnmounted(async () => {
     <ItemRow v-model="data[currentId].itemDeck" :draggable="drag" />
     <PrimaryButton class="mb-8" @click="createItem('', '')">Add Item</PrimaryButton>
     <div class="md:grid grid-cols-3 gap-4">
-      <PrimaryButton @click="exportToImage">Export to image</PrimaryButton>
+      <PrimaryButton @click="handleExportToImage">Export to image</PrimaryButton>
       <div>
         <label
           for="import-json"
