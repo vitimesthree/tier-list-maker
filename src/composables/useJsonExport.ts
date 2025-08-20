@@ -1,6 +1,6 @@
 import type { TierList } from '@/interfaces/tierlist'
 
-export function useJson() {
+export function useJsonExport() {
   // Export the current tier list data to a JSON file
   function exportToJson(data: TierList[]) {
     // Convert the data to JSON

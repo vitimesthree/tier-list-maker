@@ -4,7 +4,7 @@ import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 
 import { useIndexedDB } from '@/composables/useIndexedDb'
 import { useImageExport } from '@/composables/useImageExport'
-import { useJson } from '@/composables/useJson'
+import { useJsonExport } from '@/composables/useJsonExport'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -16,7 +16,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the storage composable
 const { saveData, loadData } = useIndexedDB()
-const { exportToJson, importFromJson } = useJson()
+const { exportToJson, importFromJson } = useJsonExport()
 const { exportToImage } = useImageExport()
 
 // Initialize the data
