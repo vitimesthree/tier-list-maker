@@ -1,7 +1,10 @@
 <script setup lang="ts">
 // Import necessary libraries and components
 import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
-import { openDB } from 'idb'
+
+import { useIndexedDB } from '@/composables/useIndexedDb'
+import { useImageExport } from '@/composables/useImageExport'
+import { useJson } from '@/composables/useJson'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -10,6 +13,11 @@ import { templates } from '@/data/templates'
 import type { Item, Tier, TierList } from '@/interfaces/tierlist'
 import InputField from '@/components/InputField.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
+
+// Initialize the storage composable
+const { saveData, loadData } = useIndexedDB()
+const { exportToJson, importFromJson } = useJson()
+const { exportToImage } = useImageExport()
 
 // Initialize the data
 const currentId = ref(0)
@@ -107,72 +115,16 @@ function createItem(label: string, image: string) {
   console.log(`Current item deck:`, data.value[currentId.value].itemDeck)
 }
 
-// Export the current tier list to an image
-async function exportToImage() {
-  // Dynamically import html2canvas to only load it when needed
-  console.log('Importing canvas library...')
-  const { default: html2canvas } = await import('html2canvas-pro')
-
-  // Render the selected area to a canvas
-  console.log('Rendering capture area...')
-
-  html2canvas(document.querySelector('#capture') as HTMLElement, {
-    windowWidth: 1152,
-  }).then((canvas) => {
-    // Download the canvas as an image
-    const link = document.createElement('a')
-    link.href = canvas.toDataURL('image/png')
-    link.download = 'tierlist.png'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    console.log('Image rendered')
-  })
-}
-
-// Export the current tier list data to a JSON file
-function exportToJson() {
-  // Convert the data to JSON
-  const jsonData = JSON.stringify(data.value, null, 2)
-
-  // Create a Blob from the JSON data
-  const blob = new Blob([jsonData], { type: 'application/json' })
-
-  // Create a link element to download the Blob
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = 'tierlist.json'
-
-  // Append the link to the body and trigger a click to download
-  document.body.appendChild(link)
-  link.click()
-
-  // Clean up by removing the link
-  document.body.removeChild(link)
-  console.log('Exported to JSON:', jsonData)
-}
-
-// Import a tier list and overwrite the current data
-function importFromJson(event: Event) {
-  // Check if the event is a file input change
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    const file = input.files[0]
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        // Parse the JSON data
-        const jsonData = JSON.parse(e.target?.result as string)
-        // Update the data with the parsed JSON
-        data.value = jsonData
-        console.log('Imported from JSON:', jsonData)
-      } catch (exception) {
-        console.error('Error parsing JSON:', exception)
-      }
+// Updated import function to handle the Promise
+async function handleImportFromJson(event: Event) {
+  try {
+    const importedData = await importFromJson(event)
+    if (importedData) {
+      data.value = importedData
     }
-    reader.readAsText(file)
-  } else {
-    console.warn('No file selected for import')
+  } catch (error) {
+    console.error('Failed to import JSON:', error)
+    // You could show an error message to the user here
   }
 }
 
@@ -203,47 +155,14 @@ function clearData() {
   }
 }
 
-// Save data to IndexedDB
-async function saveDataToIndexedDB() {
-  const db = await openDB('tierListDB', 1, {
-    upgrade(db) {
-      db.createObjectStore('tierLists')
-    },
-  })
-
-  try {
-    // Convert reactive data to plain object using JSON parse/stringify
-    const plainData = JSON.parse(JSON.stringify(data.value))
-    await db.put('tierLists', plainData, 'allTierLists')
-    console.log('Data saved to IndexedDB successfully:', plainData)
-  } catch (err) {
-    console.error('Error saving data to IndexedDB:', err)
-  } finally {
-    db.close()
-  }
+// Handle export function
+function handleExportToJson() {
+  exportToJson(data.value)
 }
 
-// Load data from IndexedDB
-async function loadDataFromIndexedDB() {
-  const db = await openDB('tierListDB', 1, {
-    upgrade(db) {
-      db.createObjectStore('tierLists')
-    },
-  })
-
-  try {
-    const savedData = await db.get('tierLists', 'allTierLists')
-    if (savedData) {
-      data.value = savedData
-      console.log('Data loaded from IndexedDB successfully:', savedData)
-    } else {
-      console.log('No saved data found in IndexedDB')
-    }
-  } catch (err) {
-    console.error('Error loading data from IndexedDB:', err)
-  } finally {
-    db.close()
-  }
+// Handle export image function
+function handleExportToImage() {
+  exportToImage('#capture')
 }
 
 // Watch for changes in the data and save to IndexedDB
@@ -258,7 +177,7 @@ watch(
 
     // Set new timeout to save after 1 second of no changes
     saveTimeout = setTimeout(() => {
-      saveDataToIndexedDB()
+      saveData(data.value)
     }, 1000)
   },
   // Deep allows watching nested properties
@@ -266,13 +185,22 @@ watch(
 )
 
 // Lifecycle hooks
-onMounted(() => {
+onMounted(async () => {
   console.log('App mounted')
   console.log('Listening for paste event')
   window.addEventListener('paste', handlePaste)
-  loadDataFromIndexedDB()
+
+  try {
+    const savedData = await loadData()
+    if (savedData) {
+      data.value = savedData
+    }
+  } catch (err) {
+    console.error('Failed to load data on mount:', err)
+  }
 })
-onUnmounted(() => {
+
+onUnmounted(async () => {
   console.log('Removing paste event listener')
   window.removeEventListener('paste', handlePaste)
 
@@ -282,7 +210,11 @@ onUnmounted(() => {
   }
 
   // Save one final time before unmounting
-  saveDataToIndexedDB()
+  try {
+    await saveData(data.value)
+  } catch (err) {
+    console.error('Failed to save data on unmount:', err)
+  }
 })
 </script>
 
@@ -310,7 +242,7 @@ onUnmounted(() => {
     <ItemRow v-model="data[currentId].itemDeck" :draggable="drag" />
     <PrimaryButton class="mb-8" @click="createItem('', '')">Add Item</PrimaryButton>
     <div class="md:grid grid-cols-3 gap-4">
-      <PrimaryButton @click="exportToImage">Export to image</PrimaryButton>
+      <PrimaryButton @click="handleExportToImage">Export to image</PrimaryButton>
       <div>
         <label
           for="import-json"
@@ -323,10 +255,10 @@ onUnmounted(() => {
           id="import-json"
           class="hidden border p-2"
           accept=".json"
-          @change="importFromJson"
+          @change="handleImportFromJson"
         />
       </div>
-      <PrimaryButton @click="exportToJson">Export</PrimaryButton>
+      <PrimaryButton @click="handleExportToJson">Export</PrimaryButton>
       <PrimaryButton @click="clearData">Clear</PrimaryButton>
     </div>
   </main>
