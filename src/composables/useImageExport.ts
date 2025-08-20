@@ -1,5 +1,5 @@
 export function useImageExport() {
-  const exportToImage = async (selector: string = '#capture') => {
+  const exportToImage = async (selector: string) => {
     // Dynamically import html2canvas to only load it when needed
     console.log('Importing canvas library...')
     const { default: html2canvas } = await import('html2canvas-pro')

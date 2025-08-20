@@ -16,8 +16,8 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the storage composable
 const { saveData, loadData } = useIndexedDB()
-const { exportToImage } = useImageExport()
 const { exportToJson, importFromJson } = useJson()
+const { exportToImage } = useImageExport()
 
 // Initialize the data
 const currentId = ref(0)
@@ -155,14 +155,14 @@ function clearData() {
   }
 }
 
-// Handle export image function
-function handleExportToImage() {
-  exportToImage()
-}
-
 // Handle export function
 function handleExportToJson() {
   exportToJson(data.value)
+}
+
+// Handle export image function
+function handleExportToImage() {
+  exportToImage('#capture')
 }
 
 // Watch for changes in the data and save to IndexedDB
