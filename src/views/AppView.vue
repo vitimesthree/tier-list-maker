@@ -2,7 +2,8 @@
 // Import necessary libraries and components
 import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
 
-import { useIndexedDB } from '@/composables/useIndexedDB'
+import { useIndexedDB } from '@/composables/useIndexedDb'
+import { useJson } from '@/composables/useJson'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -14,6 +15,7 @@ import PrimaryButton from '@/components/PrimaryButton.vue'
 
 // Initialize the storage composable
 const { saveData, loadData } = useIndexedDB()
+const { exportToJson, importFromJson } = useJson()
 
 // Initialize the data
 const currentId = ref(0)
@@ -134,50 +136,22 @@ async function exportToImage() {
   })
 }
 
-// Export the current tier list data to a JSON file
-function exportToJson() {
-  // Convert the data to JSON
-  const jsonData = JSON.stringify(data.value, null, 2)
-
-  // Create a Blob from the JSON data
-  const blob = new Blob([jsonData], { type: 'application/json' })
-
-  // Create a link element to download the Blob
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = 'tierlist.json'
-
-  // Append the link to the body and trigger a click to download
-  document.body.appendChild(link)
-  link.click()
-
-  // Clean up by removing the link
-  document.body.removeChild(link)
-  console.log('Exported to JSON:', jsonData)
+// Updated import function to handle the Promise
+async function handleImportFromJson(event: Event) {
+  try {
+    const importedData = await importFromJson(event)
+    if (importedData) {
+      data.value = importedData
+    }
+  } catch (error) {
+    console.error('Failed to import JSON:', error)
+    // You could show an error message to the user here
+  }
 }
 
-// Import a tier list and overwrite the current data
-function importFromJson(event: Event) {
-  // Check if the event is a file input change
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    const file = input.files[0]
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        // Parse the JSON data
-        const jsonData = JSON.parse(e.target?.result as string)
-        // Update the data with the parsed JSON
-        data.value = jsonData
-        console.log('Imported from JSON:', jsonData)
-      } catch (exception) {
-        console.error('Error parsing JSON:', exception)
-      }
-    }
-    reader.readAsText(file)
-  } else {
-    console.warn('No file selected for import')
-  }
+// Updated export function
+function handleExportToJson() {
+  exportToJson(data.value)
 }
 
 // Delete a tier from the tier list
@@ -297,10 +271,10 @@ onUnmounted(async () => {
           id="import-json"
           class="hidden border p-2"
           accept=".json"
-          @change="importFromJson"
+          @change="handleImportFromJson"
         />
       </div>
-      <PrimaryButton @click="exportToJson">Export</PrimaryButton>
+      <PrimaryButton @click="handleExportToJson">Export</PrimaryButton>
       <PrimaryButton @click="clearData">Clear</PrimaryButton>
     </div>
   </main>
