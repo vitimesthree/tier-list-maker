@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Import necessary libraries and components
 import { ref, watch, defineAsyncComponent, onMounted, onUnmounted } from 'vue'
-import { openDB } from 'idb'
+
+import { useIndexedDB } from '@/composables/useIndexedDB'
 
 import ItemRow from '@/components/ItemRow.vue'
 import TierRow from '@/components/TierRow.vue'
@@ -10,6 +11,9 @@ import { templates } from '@/data/templates'
 import type { Item, Tier, TierList } from '@/interfaces/tierlist'
 import InputField from '@/components/InputField.vue'
 import PrimaryButton from '@/components/PrimaryButton.vue'
+
+// Initialize the storage composable
+const { saveData, loadData } = useIndexedDB()
 
 // Initialize the data
 const currentId = ref(0)
@@ -203,49 +207,6 @@ function clearData() {
   }
 }
 
-// Save data to IndexedDB
-async function saveDataToIndexedDB() {
-  const db = await openDB('tierListDB', 1, {
-    upgrade(db) {
-      db.createObjectStore('tierLists')
-    },
-  })
-
-  try {
-    // Convert reactive data to plain object using JSON parse/stringify
-    const plainData = JSON.parse(JSON.stringify(data.value))
-    await db.put('tierLists', plainData, 'allTierLists')
-    console.log('Data saved to IndexedDB successfully:', plainData)
-  } catch (err) {
-    console.error('Error saving data to IndexedDB:', err)
-  } finally {
-    db.close()
-  }
-}
-
-// Load data from IndexedDB
-async function loadDataFromIndexedDB() {
-  const db = await openDB('tierListDB', 1, {
-    upgrade(db) {
-      db.createObjectStore('tierLists')
-    },
-  })
-
-  try {
-    const savedData = await db.get('tierLists', 'allTierLists')
-    if (savedData) {
-      data.value = savedData
-      console.log('Data loaded from IndexedDB successfully:', savedData)
-    } else {
-      console.log('No saved data found in IndexedDB')
-    }
-  } catch (err) {
-    console.error('Error loading data from IndexedDB:', err)
-  } finally {
-    db.close()
-  }
-}
-
 // Watch for changes in the data and save to IndexedDB
 let saveTimeout: number | null = null
 watch(
@@ -258,7 +219,7 @@ watch(
 
     // Set new timeout to save after 1 second of no changes
     saveTimeout = setTimeout(() => {
-      saveDataToIndexedDB()
+      saveData(data.value)
     }, 1000)
   },
   // Deep allows watching nested properties
@@ -266,13 +227,22 @@ watch(
 )
 
 // Lifecycle hooks
-onMounted(() => {
+onMounted(async () => {
   console.log('App mounted')
   console.log('Listening for paste event')
   window.addEventListener('paste', handlePaste)
-  loadDataFromIndexedDB()
+
+  try {
+    const savedData = await loadData()
+    if (savedData) {
+      data.value = savedData
+    }
+  } catch (err) {
+    console.error('Failed to load data on mount:', err)
+  }
 })
-onUnmounted(() => {
+
+onUnmounted(async () => {
   console.log('Removing paste event listener')
   window.removeEventListener('paste', handlePaste)
 
@@ -282,7 +252,11 @@ onUnmounted(() => {
   }
 
   // Save one final time before unmounting
-  saveDataToIndexedDB()
+  try {
+    await saveData(data.value)
+  } catch (err) {
+    console.error('Failed to save data on unmount:', err)
+  }
 })
 </script>
 
