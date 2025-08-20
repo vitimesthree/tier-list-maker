@@ -43,16 +43,7 @@ export function useJson() {
           }
         }
 
-        reader.onerror = () => {
-          const error = new Error('Failed to read file')
-          console.error('File reading error:', error)
-          reject(error)
-        }
-
         reader.readAsText(file)
-      } else {
-        console.warn('No file selected for import')
-        resolve(null)
       }
     })
   }
